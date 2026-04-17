@@ -2,16 +2,24 @@ use std::fs;
 use std::path::Path;
 
 const DEFAULT_MODEL: &str = "nomic-embed-text";
+const DEFAULT_MAX_CHUNK_CHARS: usize = 5000;
+
+fn default_max_chunk_chars() -> usize {
+    DEFAULT_MAX_CHUNK_CHARS
+}
 
 #[derive(Debug, serde::Deserialize, serde::Serialize)]
 pub struct Config {
     pub model: String,
+    #[serde(default = "default_max_chunk_chars")]
+    pub max_chunk_chars: usize,
 }
 
 impl Default for Config {
     fn default() -> Self {
         Self {
             model: DEFAULT_MODEL.to_string(),
+            max_chunk_chars: DEFAULT_MAX_CHUNK_CHARS,
         }
     }
 }

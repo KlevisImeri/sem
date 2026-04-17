@@ -113,7 +113,7 @@ fn cmd_index(path: &Path) {
             }
         };
 
-        match chunker::chunk_file(&file_path, &code) {
+        match chunker::chunk_file(&file_path, &code, config.max_chunk_chars) {
             Ok(chunks) => {
                 file_count += 1;
                 for mut chunk in chunks {

@@ -25,7 +25,6 @@ const TOP_LEVEL_ITEMS: &[&str] = &[
 
 const CONTAINER_ITEMS: &[&str] = &["mod_item", "trait_item", "impl_item"];
 
-const MAX_CHUNK_CHARS: usize = 5000;
 const MIN_CHUNK_CHARS: usize = 50;
 
 #[derive(Clone)]
@@ -35,7 +34,7 @@ struct WrapInfo {
     closing_indent: String,
 }
 
-pub fn chunk_file(file_path: &str, code: &[u8]) -> Result<Vec<Chunk>, String> {
+pub fn chunk_file(file_path: &str, code: &[u8], max_chunk_chars: usize) -> Result<Vec<Chunk>, String> {
     let mut parser = Parser::new();
     parser
         .set_language(&tree_sitter_rust::LANGUAGE.into())
@@ -51,7 +50,7 @@ pub fn chunk_file(file_path: &str, code: &[u8]) -> Result<Vec<Chunk>, String> {
 
     for child in root.children(&mut cursor) {
         if TOP_LEVEL_ITEMS.contains(&child.kind()) {
-            process_node(&child, code, file_path, &[], true, true, &mut chunks);
+            process_node(&child, code, file_path, &[], true, true, max_chunk_chars, &mut chunks);
         }
     }
 
@@ -65,6 +64,7 @@ fn process_node(
     wrappers: &[WrapInfo],
     is_first: bool,
     is_last: bool,
+    max_chunk_chars: usize,
     chunks: &mut Vec<Chunk>,
 ) {
     let kind = node.kind();
@@ -86,7 +86,7 @@ fn process_node(
 
         let count = children.len();
         for (i, child) in children.into_iter().enumerate() {
-            process_node(&child, code, file_path, &new_wrappers, i == 0, i == count - 1, chunks);
+            process_node(&child, code, file_path, &new_wrappers, i == 0, i == count - 1, max_chunk_chars, chunks);
         }
         return;
     }
@@ -102,7 +102,7 @@ fn process_node(
     let line_start = node.start_position().row + 1;
     let line_end = node.end_position().row + 1;
 
-    if text.len() <= MAX_CHUNK_CHARS {
+    if text.len() <= max_chunk_chars {
         let wrapped = build_wrapped_chunk(&text, wrappers, is_first, is_last);
         chunks.push(Chunk {
             file_path: file_path.to_string(),
@@ -113,7 +113,7 @@ fn process_node(
         return;
     }
 
-    let sub_chunks = split_large_content(&text, wrappers, line_start, line_end);
+    let sub_chunks = split_large_content(&text, wrappers, line_start, line_end, max_chunk_chars);
     for mut chunk in sub_chunks {
         chunk.file_path = file_path.to_string();
         chunks.push(chunk);
@@ -171,6 +171,7 @@ fn split_large_content(
     wrappers: &[WrapInfo],
     line_start: usize,
     line_end: usize,
+    max_chunk_chars: usize,
 ) -> Vec<Chunk> {
     let lines: Vec<&str> = content.lines().collect();
 
@@ -190,7 +191,7 @@ fn split_large_content(
     let sig_text: String = sig_lines.iter().map(|l| format!("{l}\n")).collect();
     let dummy = build_wrapped_chunk("X", wrappers, true, true);
     let wrapper_overhead = dummy.len().saturating_sub(1);
-    let body_budget = MAX_CHUNK_CHARS.saturating_sub(wrapper_overhead + sig_text.len() + 8);
+    let body_budget = max_chunk_chars.saturating_sub(wrapper_overhead + sig_text.len() + 8);
 
     let parts = split_lines_into_parts(body_lines, body_budget);
 
